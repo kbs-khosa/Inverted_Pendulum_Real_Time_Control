@@ -1,0 +1,207 @@
+# MATLAB Code for all the required parts has been shown below
+% Defining the matrices:
+A = [0 1 0 0;-490.63 0 -282.123 0;0 0 0 1;1486.75 0 884.617 0];
+B = [0;82.258;0;-235.043];
+C = [1 0 0 0;0 0 1 0];
+D = [0;0;0;0];
+
+% Calculating state space form:
+sys = ss(A,B,C,D);
+
+% Calculating transfer functions:
+H = tf(sys);
+
+% Calculating the Modal matrix M and the Jordan Canonical Form (i.e. Modal form)
+[M,J]=jordan(A);
+BJ = inv(M)*B;
+CJ = C*M;
+
+% Controllable Canonical Form in MATLAB is obtained as:
+CX = [B  A*B  A*A*B  A*A*A*B];
+r = rank(CX); % full rank shows observability
+CP = poly(A); % this gives the characteristic polynomial of A
+CXc = [BC  AC*BC  AC*AC*BC  AC*AC*AC*BC];
+TC = CX*inv(CXc); % this gives the transformation
+CC = C*TC; % this gives the transformed matrix in observable form
+DC = D;
+
+% Observable Canonical Form is obtained by taking the transpose of the CCF matrices:
+AO = transpose(AC);
+BO = transpose(CC);
+CO = transpose(BC);
+DO = DC;
+
+% Calculating Impulse Response:
+i = impulse(H);
+plot(i);
+grid on;
+xlabel(‘time(sec)’);
+ylabel(‘amplitude’);
+title(‘Impulse Response’);
+
+% Calculating Step Response:
+s = step(H);
+plot(s);
+grid on;
+xlabel(‘time(sec)’);
+ylabel(‘amplitude’);
+title(‘Step Response’);
+
+% Obtaining Bode Plot and Root Locus for each output:
+bode(H);
+grid on; % bode plot can be drawn for multi-input multi-output systems
+
+% Root locus for first transfer function:
+num = [82.26,1.461e-013,-6456];
+den = [1,-3.042e-014,-394,4.813e-012,-1.457e004];
+sys = tf(num,den);
+rlocus(sys);
+grid on;
+
+% Root locus for second transfer function:
+num = [-235,0,6978];
+den = [1,-3.042e-014,-394,4.813e-012,-1.457e004];
+sys = tf(num,den);
+rlocus(sys);
+grid on;
+
+% PID controller design:
+Tf1 = tf([82.26 0 -6456],[1 0 -394 0 -14570]);
+Tf2 = tf([-235 0 6978],[1 0 -394 0 -14570]);
+Kd = 1;
+Kp = 3500;
+Ki = 200;
+C1 = tf([Kd Kp Ki],[1 0]);
+sys_cntrl1 = Tf1 * C;
+Kd = -1;
+Kp = -3500;
+Ki = -200;
+C2 = tf([Kd Kp Ki],[1 0]);
+sys_cntrl2 = Tf2 * C2;
+sys_fd1 = feedback(sys_cntrl1,1);
+sys_fd2 = feedback(sys_cntrl2,1);
+
+% Step Response:
+step(sys_fd1); % step response for position control
+grid on;
+step(sys_fd2); % step response for angle control
+grid on;
+
+% Square Response:
+[Usq,Tsq] = gensig(‘square’,2,10,0.01);
+[Y,T] = lsim(sys_fd1,Usq,Tsq);
+plot(T,Y); % square response for position control
+grid on;
+legend(‘square response for position control’);
+
+[Usq,Tsq] = gensig(‘square’,2,10,0.01);
+[Y,T] = lsim(sys_fd2,Usq,Tsq);
+plot(T,Y); % square response for angle control
+grid on;
+legend(‘square response for angle control’);
+
+% Sine Response:
+[Usn,Tsn] = gensig(‘sin’,2,10,0.01);
+[Y,T] = lsim(sys_fd1,Usn,Tsn);
+plot(T,Y); % sine response for position control
+grid on;
+legend(‘sine response for position control’);
+
+[Y,T] = lsim(sys_fd2,Usn,Tsn);
+plot(T,Y); % sine response for angle control
+grid on;
+legend(‘sine response for angle control’);
+
+% Root Locus:
+rlocus(sys_fd1); % root locus for position control
+grid on;
+rlocus(sys_fd2); % root locus for angle control
+grid on;
+
+% Step Response:
+% Y(s)/D(s) = G(s)/(1 + G(s)*C(s)), C(s) being the control and D(s) being the disturbance which is step here
+% G(s)*C(s) = sys_cntrl1 or sys_cntrl2
+lp_cntrl1 = 1 + sys_cntrl1;
+step_rspn1 = Tf1/lp_cntrl1;
+step(step_rspn1); % disturbance graph for position control
+grid on;
+lp_cntrl2 = 1 + sys_cntrl2;
+step_rspn2 = Tf2/lp_cntrl2;
+step(step_rspn2); % disturbance graph for angle control
+grid on;
+
+% Full State Feedback Control:
+pole_lctn = [-4+4i  -4-4i  -12  -16];
+K = place (A,B,pole_lctn);
+B1 = B*K;
+Af = A – B1;
+
+% Step, Square and Sine Response for Full State Feedback Control
+S = K(1);
+full_stfd = ss(Af, B*S, C, D);
+tf_full_stfd = tf(full_stfd);
+step(tf_full_stfd);
+grid on;
+title(‘step response for full state feedback control’);
+
+[Y,T,X] = lsim(tf_full_stfd, Usq, Tsq);
+plot(T,Y);
+grid on;
+title(‘square response for full state feedback control’);
+legend(‘position’,’angle’);
+
+[Y,T,X] = lsim(tf_full_stfd, Usn, Tsn);
+plot(T,Y);
+grid on;
+title(‘sine response for full state feedback control’);
+legend(‘position’,’angle’);
+
+% Simulink for Step, Square and Sine Response:
+sys_new = ss(Af,B,C,D);
+tf_sys_new = tf(sys_new);
+
+% Full-order Observer:
+pole_full_ob = [-12.05+12.045i  -12.05-12.045i  -36  -48];
+G1 = place(A’,C’,pole_full_ob);
+G=G1’;
+Axe = A-G*C-B*K;
+Bxe = G;
+Cxe = -K;
+Dxe = [0 0];
+sys_obs = ss(Axe,Bxe,Cxe,Dxe);
+tf_sys_obs = tf(sys_obs);
+step(tf_sys_obs);
+grid on;
+
+% Reduced-order Observer:
+a11 = [0 0;0 0];
+Ge = [15 -5;25 5];
+A1e = [1 0;0 1];
+Ae1 = [-490.63  -282.35;1486.75  884.617];
+Aee = [0 0;0 0];
+Bu = [0;0];
+Be = [82.258;-235.043];
+K1 = [K(1)  K(3)];
+Ke = [K(2)  K(4)];
+b1 = [0;0];
+Ge = place(Aee,A1e,pole_full_ob);
+Ae = Aee – (Ge*A1e) – (Be*Ke) + (Ge*b1*Ke);
+Be1 = Ae1 – (Ge*a11) + (Aee*Ge) – (Ge*A1e*Ge) – (Be*K1) + (Ge*b1*K1) – (Be*Ke*Ge) + (Ge*b1*Ke*Ge);
+Ce = -Ke;
+De = -K1 – (Ke*Ge);
+sys_rdor = ss(Ae,Be1,Ce,De);
+tf_sys_rdor = tf(sys_rdor);
+step(tf_sys_rdor);
+grid on;
+title(‘step response for reduced order observer’);
+
+% Observer-controller Transfer Function:
+Acl = [A-B*K  B*K;zeros(size(A))  A-G*C];
+Bcl = [B*S;zeros(size(B))];
+Ccl = [C  zeros(size(C)];
+Dcl = [0;0];
+sys_cl_ob = ss(Acl,Bcl,Ccl,Dcl);
+tf_sys_cl_ob = tf(sys_cl_ob);
+step(tf_sys_cl_ob);
+grid on;
+title(‘step response for closed loop observer controller TF’);
